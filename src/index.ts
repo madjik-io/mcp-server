@@ -1,0 +1,566 @@
+#!/usr/bin/env node
+/**
+ * Black Belt Labs MCP Server
+ * ==========================
+ * Agent-native quantum-finance intelligence.
+ *
+ * Exposes Black Belt Labs metrics — portfolio optimisation, risk simulation,
+ * regime detection, sentiment, and cross-asset signals — as MCP tools that
+ * any AI agent or LLM can call natively.
+ *
+ * Authentication: requires a Black Belt Labs API key (prefix: bbl_live_ or bbl_test_).
+ * Keys are issued at https://blackbeltlabs.fi and are distinct from Madjik keys.
+ *
+ * Backend: api.madjik.io (shared infrastructure, separate key namespace)
+ */
+
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+const API_KEY = process.env.BLACKBELTLABS_API_KEY ?? "";
+const BASE_URL = "https://api.blackbeltlabs.fi/v1";
+const BBL_KEY_PREFIX_LIVE = "bbl_live_";
+const BBL_KEY_PREFIX_TEST = "bbl_test_";
+
+/**
+ * Validate that the key is a genuine BBL key, not a Madjik key (mk_) or blank.
+ * This runs at startup and on every tool call so misconfiguration surfaces early.
+ */
+function assertValidKey(key: string): void {
+  if (!key) {
+    throw new Error(
+      "BLACKBELTLABS_API_KEY is not set. " +
+      "Get your key at https://blackbeltlabs.fi"
+    );
+  }
+  if (key.startsWith("mk_")) {
+    throw new Error(
+      "Invalid key: you supplied a Madjik key (mk_...). " +
+      "Black Belt Labs requires a BBL key (bbl_live_... or bbl_test_...). " +
+      "Get your BBL key at https://blackbeltlabs.fi"
+    );
+  }
+  if (!key.startsWith(BBL_KEY_PREFIX_LIVE) && !key.startsWith(BBL_KEY_PREFIX_TEST)) {
+    throw new Error(
+      "Invalid key format. Black Belt Labs API keys start with 'bbl_live_' or 'bbl_test_'. " +
+      "Get your key at https://blackbeltlabs.fi"
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HTTP helper
+// ---------------------------------------------------------------------------
+
+async function apiGet(path: string): Promise<unknown> {
+  assertValidKey(API_KEY);
+
+  const url = `${BASE_URL}${path}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${API_KEY}`,
+      "User-Agent": "@blackbeltlabs/mcp-server/1.0.0",
+      Accept: "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    if (res.status === 401) {
+      throw new Error(
+        `Authentication failed (401). Verify your BBL key at https://blackbeltlabs.fi. ` +
+        `Note: Madjik keys (mk_...) are not accepted here.`
+      );
+    }
+    throw new Error(`API error ${res.status}: ${body}`);
+  }
+
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// BBL Metrics catalog
+// Quantum-finance framing — emphasises QC, AI, and risk capabilities.
+// Metric IDs map 1-to-1 to the shared backend.
+// ---------------------------------------------------------------------------
+
+const BBL_METRICS_CATALOG = [
+  // ── Quantum Computing ──────────────────────────────────────────────────
+  {
+    id: "ME10021",
+    name: "Portfolio Optimisation (QC)",
+    category: "Quantum Computing",
+    description:
+      "QAOA-derived optimal portfolio weights across a cross-asset universe. " +
+      "Encodes the mean-variance problem as a QUBO and solves on Qiskit Aer / IBM Quantum hardware.",
+    signal_range: "0–100 (higher = more concentrated optimal allocation)",
+    computation: "quantum",
+  },
+  {
+    id: "ME10022",
+    name: "Risk Simulation — VaR (QC)",
+    category: "Quantum Computing",
+    description:
+      "Quantum Amplitude Estimation of Value-at-Risk at 95% and 99% confidence. " +
+      "Provides quadratic speedup over classical Monte Carlo for tail-risk estimation.",
+    signal_range: "0–100 (higher = elevated tail risk)",
+    computation: "quantum",
+  },
+
+  // ── AI-Enhanced ────────────────────────────────────────────────────────
+  {
+    id: "ME10017",
+    name: "Sentiment Index (AI)",
+    category: "AI-Enhanced",
+    description:
+      "Gemini-powered sentiment aggregation across social chatter, news flow, " +
+      "and on-chain signals. Scores market mood on a 0–100 scale.",
+    signal_range: "0–100 (0=extreme fear, 100=extreme greed)",
+    computation: "ai",
+  },
+  {
+    id: "ME10019",
+    name: "Market Narrative (AI)",
+    category: "AI-Enhanced",
+    description:
+      "LLM synthesis of the dominant market narrative from news and social sources. " +
+      "Identifies regime shifts before they appear in price data.",
+    signal_range: "Qualitative narrative + bullish/bearish/neutral signal",
+    computation: "ai",
+  },
+  {
+    id: "ME10020",
+    name: "Anomaly Detection (AI)",
+    category: "AI-Enhanced",
+    description:
+      "Gemini-powered detection of statistical anomalies in cross-asset price and flow data. " +
+      "Flags unusual co-movements that may precede dislocations.",
+    signal_range: "0–100 (higher = more anomalous)",
+    computation: "ai",
+  },
+  {
+    id: "ME10016",
+    name: "Regime Detection (AI)",
+    category: "AI-Enhanced",
+    description:
+      "Hidden Markov Model + AI classification of the current macro regime: " +
+      "risk-on, risk-off, stagflation, or liquidity-crisis.",
+    signal_range: "Regime label + confidence score 0–100",
+    computation: "ai",
+  },
+  {
+    id: "ME10010",
+    name: "Regulatory Risk Index (AI)",
+    category: "AI-Enhanced",
+    description:
+      "AI-scored probability of near-term regulatory action across crypto and DeFi. " +
+      "Aggregates legislative signals, enforcement actions, and central bank commentary.",
+    signal_range: "0–100 (higher = elevated regulatory risk)",
+    computation: "ai",
+  },
+
+  // ── Classical — Risk & Leverage ────────────────────────────────────────
+  {
+    id: "ME10001",
+    name: "Cross-Asset Volatility Index",
+    category: "Risk",
+    description:
+      "Composite realised volatility across equities, bonds, FX, commodities, and crypto. " +
+      "Normalised to 0–100.",
+    signal_range: "0–100",
+    computation: "classical",
+  },
+  {
+    id: "ME10002",
+    name: "Leverage Stress Index",
+    category: "Risk",
+    description:
+      "Aggregates equity margin levels, crypto perpetual funding rates, and commodity open interest " +
+      "into a single leverage pressure gauge.",
+    signal_range: "0–100 (higher = more leveraged system)",
+    computation: "classical",
+  },
+  {
+    id: "ME10003",
+    name: "Correlation Breakdown Score",
+    category: "Risk",
+    description:
+      "Measures deviation of realised cross-asset correlations from their rolling baseline. " +
+      "Spikes indicate regime change or contagion risk.",
+    signal_range: "0–100",
+    computation: "classical",
+  },
+  {
+    id: "ME10004",
+    name: "Liquidation Cascade Risk",
+    category: "Risk",
+    description:
+      "Estimates the probability of a self-reinforcing liquidation cascade " +
+      "given current open interest, funding, and margin levels.",
+    signal_range: "0–100",
+    computation: "classical",
+  },
+
+  // ── Classical — Capital Flows ───────────────────────────────────────────
+  {
+    id: "ME10005",
+    name: "Capital Flow Radar",
+    category: "Capital Flows",
+    description:
+      "Tracks net money rotation between equities, bonds, commodities, crypto, and cash " +
+      "using ETF flow, on-chain, and derivatives data.",
+    signal_range: "Per-asset-class flow score −100 to +100",
+    computation: "classical",
+  },
+  {
+    id: "ME10006",
+    name: "Stablecoin Supply Delta",
+    category: "Capital Flows",
+    description:
+      "7-day change in total stablecoin market cap as a proxy for crypto-native liquidity. " +
+      "Positive = fresh capital entering; negative = capital exiting.",
+    signal_range: "−100 to +100",
+    computation: "classical",
+  },
+
+  // ── Classical — Market Structure ────────────────────────────────────────
+  {
+    id: "ME10007",
+    name: "Basis Divergence Index",
+    category: "Market Structure",
+    description:
+      "Spread between spot and derivatives pricing across BTC, ETH, equity index futures, " +
+      "and commodity futures. Persistent divergence signals stress or arbitrage opportunity.",
+    signal_range: "0–100",
+    computation: "classical",
+  },
+  {
+    id: "ME10008",
+    name: "Term Structure Stress",
+    category: "Market Structure",
+    description:
+      "Measures inversion and kink severity in yield curves and crypto futures curves " +
+      "simultaneously. Composite score across Treasury and BTC/ETH term structures.",
+    signal_range: "0–100 (higher = more inverted/stressed)",
+    computation: "classical",
+  },
+  {
+    id: "ME10009",
+    name: "DeFi Protocol Health",
+    category: "DeFi",
+    description:
+      "Aggregated health score for major DeFi protocols: TVL trend, collateralisation ratios, " +
+      "bad debt exposure, and governance activity.",
+    signal_range: "0–100 (higher = healthier)",
+    computation: "classical",
+  },
+] as const;
+
+interface MetricEntry {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  signal_range: string;
+  computation: "quantum" | "ai" | "classical";
+}
+
+// Live catalog from the registry-backed API (/v1/catalog). Cached 5 min; falls
+// back to the static BBL_METRICS_CATALOG if the API is unreachable. New metrics
+// (ME10048+) appear automatically — no rebuild needed.
+let _catalog: MetricEntry[] | null = null;
+let _catalogTs = 0;
+const CATALOG_TTL = 5 * 60 * 1000;
+
+async function getCatalog(): Promise<readonly MetricEntry[]> {
+  if (_catalog && Date.now() - _catalogTs < CATALOG_TTL) return _catalog;
+  try {
+    const data: any = await apiGet("/catalog");
+    _catalog = ((data.metrics ?? []) as any[]).map((m) => ({
+      id: m.metric_id,
+      name: m.name,
+      category: m.category,
+      description: `${m.name}. Category: ${m.category}; computation: ${m.computation_method}.`,
+      signal_range: "0-100",
+      computation:
+        m.computation_method === "qc" ? "quantum" :
+        m.computation_method === "ai" ? "ai" : "classical",
+    }));
+    _catalogTs = Date.now();
+    return _catalog;
+  } catch (_e) {
+    return _catalog ?? BBL_METRICS_CATALOG;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// MCP Server
+// ---------------------------------------------------------------------------
+
+const server = new McpServer({
+  name: "blackbeltlabs",
+  version: "1.0.0",
+});
+
+// ── Tool 1: get_metric ──────────────────────────────────────────────────────
+
+server.tool(
+  "get_metric",
+  "Fetch the current value, signal, and metadata for a single Black Belt Labs metric by ID. " +
+  "Use list_metrics or search_metrics first to find the right metric ID.",
+  {
+    metric_id: z
+      .string()
+      .regex(/^ME\d{5}$/i)
+      .describe("Metric ID, e.g. ME10021 (Portfolio Optimisation QC) or ME10017 (Sentiment AI)"),
+  },
+  async ({ metric_id }) => {
+    const data = await apiGet(`/metrics/${metric_id.toUpperCase()}`);
+    return {
+      content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    };
+  }
+);
+
+// ── Tool 2: get_quantum_metrics ─────────────────────────────────────────────
+
+server.tool(
+  "get_quantum_metrics",
+  "Fetch all quantum-computed metrics: Portfolio Optimisation (ME10021) and " +
+  "Risk Simulation VaR (ME10022). These are the flagship Black Belt Labs QC outputs.",
+  {},
+  async () => {
+    const qcIds = (await getCatalog())
+      .filter((m) => m.computation === "quantum")
+      .map((m) => m.id);
+
+    const results = await Promise.all(
+      qcIds.map(async (id) => {
+        try {
+          return await apiGet(`/metrics/${id}`);
+        } catch (err) {
+          return { metric_id: id, error: String(err) };
+        }
+      })
+    );
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          computation: "quantum",
+          backend: "Qiskit Aer / IBM Quantum",
+          metrics: results,
+        }, null, 2),
+      }],
+    };
+  }
+);
+
+// ── Tool 3: get_ai_metrics ──────────────────────────────────────────────────
+
+server.tool(
+  "get_ai_metrics",
+  "Fetch all AI-enhanced metrics: Sentiment (ME10017), Market Narrative (ME10019), " +
+  "Anomaly Detection (ME10020), Regime Detection (ME10016), and Regulatory Risk (ME10010). " +
+  "All computed via Gemini on Vertex AI.",
+  {},
+  async () => {
+    const aiIds = (await getCatalog())
+      .filter((m) => m.computation === "ai")
+      .map((m) => m.id);
+
+    const results = await Promise.all(
+      aiIds.map(async (id) => {
+        try {
+          return await apiGet(`/metrics/${id}`);
+        } catch (err) {
+          return { metric_id: id, error: String(err) };
+        }
+      })
+    );
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          computation: "ai",
+          model: "Gemini (Vertex AI)",
+          metrics: results,
+        }, null, 2),
+      }],
+    };
+  }
+);
+
+// ── Tool 4: get_risk_snapshot ───────────────────────────────────────────────
+
+server.tool(
+  "get_risk_snapshot",
+  "Fetch a composite risk snapshot combining QC VaR (ME10022), Leverage Stress (ME10002), " +
+  "Liquidation Cascade Risk (ME10004), and Correlation Breakdown (ME10003). " +
+  "Use this for a fast single-call risk assessment.",
+  {},
+  async () => {
+    const riskIds = ["ME10022", "ME10002", "ME10004", "ME10003"];
+
+    const results = await Promise.all(
+      riskIds.map(async (id) => {
+        try {
+          return await apiGet(`/metrics/${id}`);
+        } catch (err) {
+          return { metric_id: id, error: String(err) };
+        }
+      })
+    );
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          snapshot: "risk",
+          description:
+            "Composite risk view: QC-derived VaR, leverage stress, liquidation cascade probability, " +
+            "and cross-asset correlation breakdown.",
+          metrics: results,
+        }, null, 2),
+      }],
+    };
+  }
+);
+
+// ── Tool 5: list_metrics ────────────────────────────────────────────────────
+
+server.tool(
+  "list_metrics",
+  "List all available Black Belt Labs metrics with their IDs, names, categories, " +
+  "computation method (quantum / ai / classical), and descriptions.",
+  {
+    category: z
+      .enum(["all", "Quantum Computing", "AI-Enhanced", "Risk", "Capital Flows", "Market Structure", "DeFi"])
+      .optional()
+      .default("all")
+      .describe("Filter by category, or 'all' for the full catalog"),
+    computation: z
+      .enum(["all", "quantum", "ai", "classical"])
+      .optional()
+      .default("all")
+      .describe("Filter by computation method"),
+  },
+  async ({ category, computation }) => {
+    let metrics: readonly MetricEntry[] = await getCatalog();
+
+    if (category !== "all") {
+      metrics = metrics.filter((m) => m.category === category);
+    }
+    if (computation !== "all") {
+      metrics = metrics.filter((m) => m.computation === computation);
+    }
+
+    const rows = metrics.map((m) =>
+      `${m.id} [${m.computation.toUpperCase()}] ${m.name} (${m.category})\n  ${m.description}`
+    );
+
+    return {
+      content: [{
+        type: "text",
+        text:
+          `Black Belt Labs — ${metrics.length} metric(s) found\n` +
+          `(filters: category=${category}, computation=${computation})\n\n` +
+          rows.join("\n\n"),
+      }],
+    };
+  }
+);
+
+// ── Tool 6: search_metrics ──────────────────────────────────────────────────
+
+server.tool(
+  "search_metrics",
+  "Search Black Belt Labs metrics by keyword. Searches metric names, descriptions, and categories.",
+  {
+    query: z
+      .string()
+      .describe(
+        "Search query, e.g. 'quantum', 'VaR', 'sentiment', 'regime', 'leverage', 'stablecoin'"
+      ),
+  },
+  async ({ query }) => {
+    const q = query.toLowerCase();
+    const matches = (await getCatalog()).filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.description.toLowerCase().includes(q) ||
+        m.category.toLowerCase().includes(q) ||
+        m.computation.toLowerCase().includes(q)
+    );
+
+    if (matches.length === 0) {
+      return {
+        content: [{
+          type: "text",
+          text:
+            `No metrics found matching "${query}". ` +
+            `Try: 'quantum', 'ai', 'risk', 'leverage', 'sentiment', 'regime', 'flow'.`,
+        }],
+      };
+    }
+
+    const text = matches
+      .map((m) => `${m.id} [${m.computation.toUpperCase()}]: ${m.name} — ${m.description}`)
+      .join("\n");
+
+    return {
+      content: [{
+        type: "text",
+        text: `Found ${matches.length} metric(s) matching "${query}":\n\n${text}`,
+      }],
+    };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Resource: metrics catalog
+// ---------------------------------------------------------------------------
+
+server.resource(
+  "metrics-catalog",
+  "blackbeltlabs://catalog",
+  async (uri) => ({
+    contents: [{
+      uri: uri.href,
+      text: JSON.stringify(await getCatalog(), null, 2),
+      mimeType: "application/json",
+    }],
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Start
+// ---------------------------------------------------------------------------
+
+async function main(): Promise<void> {
+  // Validate key at startup — fail loudly rather than on first tool call
+  try {
+    assertValidKey(API_KEY);
+  } catch (err) {
+    console.error(`[blackbeltlabs-mcp] ${String(err)}`);
+    process.exit(1);
+  }
+
+  const keyType = API_KEY.startsWith(BBL_KEY_PREFIX_TEST) ? "TEST" : "LIVE";
+  console.error(`[blackbeltlabs-mcp] Starting — key type: ${keyType}`);
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+main().catch((err) => {
+  console.error("[blackbeltlabs-mcp] Fatal:", err);
+  process.exit(1);
+});

@@ -1,0 +1,27 @@
+# deps / build
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+# archives
+*.zip
+*.tgz
+# terraform state (may contain secrets)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+# secrets / creds
+.env
+.env.*
+*.key
+*-key.json
+*credentials*.json
+service-account*.json
+# os
+.DS_Store
+
+# terraform plan (may embed secrets)
+tfplan
+*.tfplan
