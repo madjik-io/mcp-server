@@ -65,3 +65,7 @@ BLACKBELTLABS_API_KEY=bbl_live_your_key npx @blackbeltlabs/mcp-server
 ## License
 
 MIT © Black Belt Labs
+
+## Disclaimer
+
+Madjik metrics are informational market indicators computed by the Black Belt Labs engine. They are not investment advice, an offer, or a recommendation to buy or sell any asset. Quantum-computed metrics run on Qiskit simulators (hardware-ready circuit designs).
