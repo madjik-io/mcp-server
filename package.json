@@ -1,7 +1,7 @@
 {
-  "name": "@blackbeltlabs/mcp-server",
-  "version": "1.0.1",
-  "description": "MCP server for Black Belt Labs quantum-finance intelligence. Portfolio optimisation, risk simulation, regime detection, and cross-asset metrics — delivered agent-native.",
+  "name": "@madjik/mcp-server",
+  "version": "2.0.0",
+  "description": "Madjik MCP server: quantum-finance intelligence computed by the Black Belt Labs engine. Portfolio optimisation, risk simulation, regime detection, and cross-asset metrics — delivered agent-native.",
   "keywords": [
     "mcp",
     "quantum",
@@ -16,17 +16,17 @@
     "black-belt-labs",
     "blackbeltlabs"
   ],
-  "author": "Black Belt Labs <hello@blackbeltlabs.fi>",
+  "author": "Madjik <hello@madjik.io>",
   "license": "MIT",
-  "homepage": "https://blackbeltlabs.fi",
+  "homepage": "https://madjik.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/blackbeltlabs/mcp-server"
+    "url": "https://github.com/madjik/mcp-server"
   },
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "blackbeltlabs-mcp": "dist/index.js"
+    "madjik-mcp": "dist/index.js"
   },
   "files": [
     "dist",

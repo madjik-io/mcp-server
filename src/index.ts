@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * Black Belt Labs MCP Server
- * ==========================
- * Agent-native quantum-finance intelligence.
+ * Madjik MCP Server
+ * =================
+ * Agent-native market intelligence, computed by the Black Belt Labs engine.
  *
- * Exposes Black Belt Labs metrics — portfolio optimisation, risk simulation,
+ * Exposes Madjik metrics — portfolio optimisation, risk simulation,
  * regime detection, sentiment, and cross-asset signals — as MCP tools that
  * any AI agent or LLM can call natively.
  *
- * Authentication: requires a Black Belt Labs API key (prefix: bbl_live_ or bbl_test_).
- * Keys are issued at https://blackbeltlabs.fi and are distinct from Madjik keys.
+ * Authentication: a Madjik API key (mk_...) or legacy Black Belt Labs key
+ * (bbl_live_... / bbl_test_...). Keys are issued at https://madjik.io.
  *
- * Backend: api.madjik.io (shared infrastructure, separate key namespace)
+ * Backend: api.madjik.io (Madjik storefront over the BBL wholesale engine)
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -22,33 +22,27 @@ import { z } from "zod";
 // Configuration
 // ---------------------------------------------------------------------------
 
-const API_KEY = process.env.BLACKBELTLABS_API_KEY ?? "";
-const BASE_URL = "https://api.blackbeltlabs.fi/v1";
-const BBL_KEY_PREFIX_LIVE = "bbl_live_";
-const BBL_KEY_PREFIX_TEST = "bbl_test_";
+const API_KEY = process.env.MADJIK_API_KEY ?? process.env.BLACKBELTLABS_API_KEY ?? "";
+const BASE_URL = process.env.MADJIK_API_URL ?? "https://api.madjik.io/v1";
+const KEY_PREFIXES = ["mk_", "bbl_live_", "bbl_test_"];
 
 /**
- * Validate that the key is a genuine BBL key, not a Madjik key (mk_) or blank.
+ * Validate that a key is present and in a known namespace (Madjik mk_ keys and
+ * legacy Black Belt Labs bbl_ keys are both accepted by the shared backend).
  * This runs at startup and on every tool call so misconfiguration surfaces early.
  */
 function assertValidKey(key: string): void {
   if (!key) {
     throw new Error(
-      "BLACKBELTLABS_API_KEY is not set. " +
-      "Get your key at https://blackbeltlabs.fi"
+      "MADJIK_API_KEY is not set. " +
+      "Get your key at https://madjik.io"
     );
   }
-  if (key.startsWith("mk_")) {
+  if (!KEY_PREFIXES.some((p) => key.startsWith(p))) {
     throw new Error(
-      "Invalid key: you supplied a Madjik key (mk_...). " +
-      "Black Belt Labs requires a BBL key (bbl_live_... or bbl_test_...). " +
-      "Get your BBL key at https://blackbeltlabs.fi"
-    );
-  }
-  if (!key.startsWith(BBL_KEY_PREFIX_LIVE) && !key.startsWith(BBL_KEY_PREFIX_TEST)) {
-    throw new Error(
-      "Invalid key format. Black Belt Labs API keys start with 'bbl_live_' or 'bbl_test_'. " +
-      "Get your key at https://blackbeltlabs.fi"
+      "Invalid key format. Madjik API keys start with 'mk_' " +
+      "(legacy 'bbl_live_' / 'bbl_test_' keys are also accepted). " +
+      "Get your key at https://madjik.io"
     );
   }
 }
@@ -64,7 +58,7 @@ async function apiGet(path: string): Promise<unknown> {
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${API_KEY}`,
-      "User-Agent": "@blackbeltlabs/mcp-server/1.0.0",
+      "User-Agent": "@madjik/mcp-server/2.0.0",
       Accept: "application/json",
     },
   });
@@ -73,8 +67,7 @@ async function apiGet(path: string): Promise<unknown> {
     const body = await res.text().catch(() => "");
     if (res.status === 401) {
       throw new Error(
-        `Authentication failed (401). Verify your BBL key at https://blackbeltlabs.fi. ` +
-        `Note: Madjik keys (mk_...) are not accepted here.`
+        `Authentication failed (401). Verify your key at https://madjik.io.`
       );
     }
     throw new Error(`API error ${res.status}: ${body}`);
@@ -303,15 +296,15 @@ async function getCatalog(): Promise<readonly MetricEntry[]> {
 // ---------------------------------------------------------------------------
 
 const server = new McpServer({
-  name: "blackbeltlabs",
-  version: "1.0.0",
+  name: "madjik",
+  version: "2.0.0",
 });
 
 // ── Tool 1: get_metric ──────────────────────────────────────────────────────
 
 server.tool(
   "get_metric",
-  "Fetch the current value, signal, and metadata for a single Black Belt Labs metric by ID. " +
+  "Fetch the current value, signal, and metadata for a single Madjik metric by ID (computed by Black Belt Labs). " +
   "Use list_metrics or search_metrics first to find the right metric ID.",
   {
     metric_id: z
@@ -549,18 +542,18 @@ async function main(): Promise<void> {
   try {
     assertValidKey(API_KEY);
   } catch (err) {
-    console.error(`[blackbeltlabs-mcp] ${String(err)}`);
+    console.error(`[madjik-mcp] ${String(err)}`);
     process.exit(1);
   }
 
-  const keyType = API_KEY.startsWith(BBL_KEY_PREFIX_TEST) ? "TEST" : "LIVE";
-  console.error(`[blackbeltlabs-mcp] Starting — key type: ${keyType}`);
+  const keyType = API_KEY.startsWith("bbl_test_") ? "TEST" : "LIVE";
+  console.error(`[madjik-mcp] Starting — key type: ${keyType}`);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
 
 main().catch((err) => {
-  console.error("[blackbeltlabs-mcp] Fatal:", err);
+  console.error("[madjik-mcp] Fatal:", err);
   process.exit(1);
 });
