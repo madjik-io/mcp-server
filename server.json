@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.json",
+  "name": "io.github.madjik-io/mcp-server",
+  "description": "Quantum-finance market metrics for AI agents: portfolio optimization, risk simulation, regime detection and 40+ crypto indicators computed by the Black Belt Labs engine.",
+  "repository": {
+    "url": "https://github.com/madjik-io/mcp-server",
+    "source": "github"
+  },
+  "version": "2.0.1",
+  "packages": [
+    {
+      "registry_type": "npm",
+      "identifier": "madjik-mcp-server",
+      "version": "2.0.1",
+      "transport": { "type": "stdio" },
+      "environment_variables": [
+        {
+          "name": "MADJIK_API_KEY",
+          "description": "Madjik API key (get one at https://api.madjik.io/pricing)",
+          "is_required": true,
+          "is_secret": true
+        }
+      ]
+    }
+  ]
+}
