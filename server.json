@@ -1,5 +1,5 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.madjik-io/mcp-server",
   "description": "Quantum-finance market metrics for AI agents, computed by the Black Belt Labs engine.",
   "repository": {
