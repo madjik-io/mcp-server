@@ -85,7 +85,7 @@ async function apiGet(path: string): Promise<unknown> {
 const BBL_METRICS_CATALOG = [
   // ── Quantum Computing ──────────────────────────────────────────────────
   {
-    id: "ME10021",
+    id: "M50021",
     name: "Portfolio Optimisation (QC)",
     category: "Quantum Computing",
     description:
@@ -95,7 +95,7 @@ const BBL_METRICS_CATALOG = [
     computation: "quantum",
   },
   {
-    id: "ME10022",
+    id: "M50022",
     name: "Risk Simulation — VaR (QC)",
     category: "Quantum Computing",
     description:
@@ -107,7 +107,7 @@ const BBL_METRICS_CATALOG = [
 
   // ── AI-Enhanced ────────────────────────────────────────────────────────
   {
-    id: "ME10017",
+    id: "M50017",
     name: "Sentiment Index (AI)",
     category: "AI-Enhanced",
     description:
@@ -117,7 +117,7 @@ const BBL_METRICS_CATALOG = [
     computation: "ai",
   },
   {
-    id: "ME10019",
+    id: "M50019",
     name: "Market Narrative (AI)",
     category: "AI-Enhanced",
     description:
@@ -127,7 +127,7 @@ const BBL_METRICS_CATALOG = [
     computation: "ai",
   },
   {
-    id: "ME10020",
+    id: "M50020",
     name: "Anomaly Detection (AI)",
     category: "AI-Enhanced",
     description:
@@ -137,7 +137,7 @@ const BBL_METRICS_CATALOG = [
     computation: "ai",
   },
   {
-    id: "ME10016",
+    id: "M50016",
     name: "Regime Detection (AI)",
     category: "AI-Enhanced",
     description:
@@ -147,7 +147,7 @@ const BBL_METRICS_CATALOG = [
     computation: "ai",
   },
   {
-    id: "ME10010",
+    id: "M50010",
     name: "Regulatory Risk Index (AI)",
     category: "AI-Enhanced",
     description:
@@ -159,7 +159,7 @@ const BBL_METRICS_CATALOG = [
 
   // ── Classical — Risk & Leverage ────────────────────────────────────────
   {
-    id: "ME10001",
+    id: "M50001",
     name: "Cross-Asset Volatility Index",
     category: "Risk",
     description:
@@ -169,7 +169,7 @@ const BBL_METRICS_CATALOG = [
     computation: "classical",
   },
   {
-    id: "ME10002",
+    id: "M50002",
     name: "Leverage Stress Index",
     category: "Risk",
     description:
@@ -179,7 +179,7 @@ const BBL_METRICS_CATALOG = [
     computation: "classical",
   },
   {
-    id: "ME10003",
+    id: "M50003",
     name: "Correlation Breakdown Score",
     category: "Risk",
     description:
@@ -189,7 +189,7 @@ const BBL_METRICS_CATALOG = [
     computation: "classical",
   },
   {
-    id: "ME10004",
+    id: "M50004",
     name: "Liquidation Cascade Risk",
     category: "Risk",
     description:
@@ -201,7 +201,7 @@ const BBL_METRICS_CATALOG = [
 
   // ── Classical — Capital Flows ───────────────────────────────────────────
   {
-    id: "ME10005",
+    id: "M50005",
     name: "Capital Flow Radar",
     category: "Capital Flows",
     description:
@@ -211,7 +211,7 @@ const BBL_METRICS_CATALOG = [
     computation: "classical",
   },
   {
-    id: "ME10006",
+    id: "M50006",
     name: "Stablecoin Supply Delta",
     category: "Capital Flows",
     description:
@@ -223,7 +223,7 @@ const BBL_METRICS_CATALOG = [
 
   // ── Classical — Market Structure ────────────────────────────────────────
   {
-    id: "ME10007",
+    id: "M50007",
     name: "Basis Divergence Index",
     category: "Market Structure",
     description:
@@ -233,7 +233,7 @@ const BBL_METRICS_CATALOG = [
     computation: "classical",
   },
   {
-    id: "ME10008",
+    id: "M50008",
     name: "Term Structure Stress",
     category: "Market Structure",
     description:
@@ -243,7 +243,7 @@ const BBL_METRICS_CATALOG = [
     computation: "classical",
   },
   {
-    id: "ME10009",
+    id: "M50009",
     name: "DeFi Protocol Health",
     category: "DeFi",
     description:
@@ -265,7 +265,7 @@ interface MetricEntry {
 
 // Live catalog from the registry-backed API (/v1/catalog). Cached 5 min; falls
 // back to the static BBL_METRICS_CATALOG if the API is unreachable. New metrics
-// (ME10048+) appear automatically — no rebuild needed.
+// (M50048+) appear automatically — no rebuild needed.
 let _catalog: MetricEntry[] | null = null;
 let _catalogTs = 0;
 const CATALOG_TTL = 5 * 60 * 1000;
@@ -310,7 +310,7 @@ server.tool(
     metric_id: z
       .string()
       .regex(/^ME\d{5}$/i)
-      .describe("Metric ID, e.g. ME10021 (Portfolio Optimisation QC) or ME10017 (Sentiment AI)"),
+      .describe("Metric ID, e.g. M50021 (Portfolio Optimisation QC) or M50017 (Sentiment AI)"),
   },
   async ({ metric_id }) => {
     const data = await apiGet(`/metrics/${metric_id.toUpperCase()}`);
@@ -324,8 +324,8 @@ server.tool(
 
 server.tool(
   "get_quantum_metrics",
-  "Fetch all quantum-computed metrics: Portfolio Optimisation (ME10021) and " +
-  "Risk Simulation VaR (ME10022). These are the flagship Black Belt Labs QC outputs.",
+  "Fetch all quantum-computed metrics: Portfolio Optimisation (M50021) and " +
+  "Risk Simulation VaR (M50022). These are the flagship Black Belt Labs QC outputs.",
   {},
   async () => {
     const qcIds = (await getCatalog())
@@ -359,8 +359,8 @@ server.tool(
 
 server.tool(
   "get_ai_metrics",
-  "Fetch all AI-enhanced metrics: Sentiment (ME10017), Market Narrative (ME10019), " +
-  "Anomaly Detection (ME10020), Regime Detection (ME10016), and Regulatory Risk (ME10010). " +
+  "Fetch all AI-enhanced metrics: Sentiment (M50017), Market Narrative (M50019), " +
+  "Anomaly Detection (M50020), Regime Detection (M50016), and Regulatory Risk (M50010). " +
   "All computed via Gemini on Vertex AI.",
   {},
   async () => {
@@ -395,12 +395,12 @@ server.tool(
 
 server.tool(
   "get_risk_snapshot",
-  "Fetch a composite risk snapshot combining QC VaR (ME10022), Leverage Stress (ME10002), " +
-  "Liquidation Cascade Risk (ME10004), and Correlation Breakdown (ME10003). " +
+  "Fetch a composite risk snapshot combining QC VaR (M50022), Leverage Stress (M50002), " +
+  "Liquidation Cascade Risk (M50004), and Correlation Breakdown (M50003). " +
   "Use this for a fast single-call risk assessment.",
   {},
   async () => {
-    const riskIds = ["ME10022", "ME10002", "ME10004", "ME10003"];
+    const riskIds = ["M50022", "M50002", "M50004", "M50003"];
 
     const results = await Promise.all(
       riskIds.map(async (id) => {
